@@ -1,7 +1,6 @@
 # from seq2seq_model import DecoderRNN, EncoderRNN
 from seq2seq_model import EncoderRNN, AttnDecoderRNN
-from midi_io_dic_mode import *
-from train_left_right import combine_left_and_right
+from midi_io import *
 from parameters import *
 import torch
 import numpy as np

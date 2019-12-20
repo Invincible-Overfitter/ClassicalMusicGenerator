@@ -1,18 +1,11 @@
-import numpy as np
-import torch
 from generate import *
-from midi_io_dic_mode import *
-from midi_io_musegan import findall_endswith, make_sure_path_exists
-from parameters import *
-import os
 device = torch.device("cpu")
-from seq2seq_model import DecoderRNN, EncoderRNN, AttnDecoderRNN
-from train_left_right import *
-from midi_io_dic_mode import *
+from seq2seq_model import EncoderRNN, AttnDecoderRNN
+from midi_io import *
 from parameters import *
 import torch
-from torch import optim
 from torch import nn
+from torch import optim
 import argparse
 
 device = torch.device("cpu")
@@ -45,28 +38,44 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer,
     decoder_optimizer.step()
     return loss.item() / target_length
 
+def trainIters(train_x, train_y, encoder, decoder, learning_rate=1e-3, batch_size=32):
+    print_loss_total = 0  # Reset every print_every
+    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate, momentum=0.9)
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate, momentum=0.9)
+    criterion = nn.CrossEntropyLoss()
+    for iter in range(1, len(train_x)+1): # iterate each sone
+        input_tensor = train_x[iter-1]
+        target_tensor = train_y[iter-1]
+        input_tensor = torch.tensor(input_tensor, dtype=torch.long)
+        target_tensor = torch.tensor(target_tensor, dtype=torch.long)
+        loss = 0
+        c = 1
+        for i in range(0, input_tensor.size(1), batch_size):
+            loss += train(input_tensor[:, i: i+batch_size], target_tensor[:, i: i+batch_size],
+                          encoder, decoder, encoder_optimizer, decoder_optimizer, criterion)
+            c += 1
+
+        print_loss_total += loss
+    return print_loss_total / c
 
 
 def train_mul(args):
-    model_name = "left_right_mul-beat8"
-    origin_num_bars = 10
-    target_num_bars = 20
-    target_length = STAMPS_PER_BAR * target_num_bars
-    origin_length = origin_num_bars * STAMPS_PER_BAR
+    model_name = "best model"
     right_tracks = []
     left_tracks = []
-    for midi_path in findall_endswith(".mid", "../data/"):
-        pianoroll_data = midiToPianoroll(midi_path, merge=False, velocity=False)  # (n_time_stamp, 128, num_track)
-        right_track, left_track = pianoroll_data[:, :, 0], pianoroll_data[:, :, 1]
-        right_tracks.append(right_track)
-        left_tracks.append(left_track)
+    for midi_path in findall_endswith(".mid", "../data/classical"):
+        pianoroll_data = midi2Pianoroll(midi_path, merge=False, velocity=False)  # (n_time_stamp, 128, num_track)
+        if pianoroll_data is not None:
+            right_track, left_track = pianoroll_data[:, :, 0], pianoroll_data[:, :, 1]
+            right_tracks.append(right_track)
+            left_tracks.append(left_track)
 
     input_datax, input_datay = createSeqNetInputs(right_tracks, time_len, output_len)
     encoder1 = EncoderRNN(input_dim, hidden_dim).to(device)
     decoder1 = AttnDecoderRNN(input_dim, hidden_dim, dropout_p=0.1, max_length=time_len).to(device)
     if args.load_epoch != 0:
-        encoder1.load_state_dict(torch.load(f'../models/mul_encoder_{model_name}_' + str(args.load_epoch) + f'_Adam_7e-05'))
-        decoder1.load_state_dict(torch.load(f'../models/mul_decoder_{model_name}_' + str(args.load_epoch) + f'_Adam_7e-05'))
+        encoder1.load_state_dict(torch.load(f'../models/mul_encoder_{model_name}_' + str(args.load_epoch)))
+        decoder1.load_state_dict(torch.load(f'../models/mul_decoder_{model_name}_' + str(args.load_epoch)))
 
     for i in range(1, args.epoch_number + 1):
         loss = trainIters(input_datax, input_datay, encoder1, decoder1)
@@ -74,8 +83,6 @@ def train_mul(args):
         if i % 50 == 0:
             torch.save(encoder1.state_dict(), f'../models/mul_encoder_{model_name}_' + str(i + args.load_epoch))
             torch.save(decoder1.state_dict(), f'../models/mul_decoder_{model_name}_' + str(i + args.load_epoch))
-    midi_path = "/Users/adam/Desktop/COURSES/11-701/MIDI-preprocessing/chp_op18.mid"
-    predict(midi_path, origin_length, encoder1, decoder1, target_length, model_name)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='train a MIDI_NET')

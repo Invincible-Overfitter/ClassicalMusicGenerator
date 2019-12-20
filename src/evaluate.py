@@ -1,8 +1,8 @@
-from midi_io_dic_mode import *
+from midi_io import *
 from parameters import STAMPS_PER_BAR
 import numpy as np
 def evaluate(midi_path):
-    pianoroll = midiToPianoroll(midi_path)  # (time, 128)
+    pianoroll = midi2Pianoroll(midi_path)  # (time, 128)
     # UPC:number of used pitch classes per bar (from 0 to 12).
     barsize = STAMPS_PER_BAR
     size = pianoroll.shape[0]

@@ -1,11 +1,11 @@
 from parameters import *
 import torch
-from midi_io_dic_mode import *
+from midi_io import *
 import argparse
 import numpy as np
 
 device = torch.device("cpu")
-#
+
 # def generate(input_tensor, encoder, decoder, target_length, random=False, random_interval=0):
 #     encoder.eval()
 #     decoder.eval()
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     corpus_r, token_size = load_corpus("../output/chord_dictionary/right-hand.json")
     midi_path = next(findall_endswith('.mid', root_path))
     piano_data_r = midiToPianoroll(midi_path, merge=True, velocity=True)
-    dic_data = pianoroll2dicMode(piano_data_r, corpus_r)
+    dic_data = pianoroll2Embedding(piano_data_r, corpus_r)
     input_datax = torch.tensor(dic_data[500:500 + args.origin_length]).unsqueeze(1).long()
 
     encoder1 = EncoderRNN(token_size, emb_size, hidden_dim).to(device)

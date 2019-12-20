@@ -1,4 +1,4 @@
-from midi_io_dic_mode import *
+from midi_io import *
 from gensim.models import Word2Vec
 from parameters import *
 import numpy as np
@@ -12,7 +12,7 @@ origin_length = origin_num_bars * STAMPS_PER_BAR
 left_tracks, right_tracks = [], []
 # get_dictionary_of_chord(root, two_hand=False)
 for midi_path in findall_endswith('.mid', root):
-    piano_roll_data = midiToPianoroll(midi_path, merge=False, velocity=False, )
+    piano_roll_data = midi2Pianoroll(midi_path, merge=False, velocity=False, )
     right_track, left_track = piano_roll_data[:, :, 0], piano_roll_data[:, :, 1]
     left_tracks.append(left_track)
     right_tracks.append(right_track)
@@ -20,7 +20,7 @@ for midi_path in findall_endswith('.mid', root):
 data = []
 right_dictionary, token_size = load_corpus("../output/chord_dictionary/right-hand.json")
 for song in right_tracks:
-    dic_data = pianoroll2dicMode(song, right_dictionary)
+    dic_data = pianoroll2Embedding(song, right_dictionary)
     dic_data = [str(i) for i in dic_data]
     data.append(dic_data)
 
