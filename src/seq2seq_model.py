@@ -43,14 +43,13 @@ class AttnDecoderRNN(nn.Module):
         self.max_length = max_length
 
         self.embedding = embedding
-        self.ref_embedding = nn.Embedding(token_size, hidden_size)
-        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        # self.ref_embedding = nn.Embedding(token_size, hidden_size)
         self.dropout = nn.Dropout(self.dropout_p)
-        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
-        self.out = nn.Linear(self.hidden_size, token_size)
+        self.gru = nn.GRUCell(self.embed_size + self.hidden_size, self.hidden_size)
+        self.prob_1 = nn.Linear(self.hidden_size * 2, self.hidden_size * 4)
+        self.prob_2 = nn.Linear(self.hidden_size * 4, token_size)
 
-    def forward(self, input, hidden, encoder_outputs):
+    def forward(self, input, context, hidden, encoder_outputs):
         '''
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
@@ -61,17 +60,20 @@ class AttnDecoderRNN(nn.Module):
         attn_weights = F.softmax(
             self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
         '''
-        input = self.embedding(input)  # [1, N, E]
-        attn_weights = F.softmax(
-            self.attn(torch.cat((input[0], hidden[0]), 1)), dim=1)
 
-        attn_applied = torch.bmm(attn_weights.unsqueeze(1),
-                                 encoder_outputs.transpose(0, 1)).transpose(0, 1)
+        input = self.embedding(input)  # [N, H]
+        query = self.gru(torch.cat([input, context], dim=1), hidden)
 
-        output = torch.cat((input[0], attn_applied[0]), 1)  #1)
-        output = self.attn_combine(output).unsqueeze(0)
+        # Input/output shape of bmm: (N, T, H), (N, H, 1) -> (N, T, 1)
+        energy = torch.bmm(encoder_outputs.transpose(0, 1), query.unsqueeze(2)).squeeze(2)
+        attn_weights = F.softmax(energy, dim=1)
 
+        # Input/output shape of bmm: (N, 1, T), (N, T, H) -> (N, 1, H)
+        context = torch.bmm(attn_weights.unsqueeze(1),
+                                 encoder_outputs.transpose(0, 1)).squeeze(1)
+
+        output = torch.cat((query, context), 1)  #1)
+        output = self.prob_1(output)
         output = F.relu(output)
-        output, hidden = self.gru(output, hidden)
-        output = self.out(output)
-        return output, hidden, attn_weights
+        output = self.prob_2(output)
+        return output, context, query, attn_weights
