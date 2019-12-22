@@ -1,6 +1,6 @@
 
 hidden_dim = 256
-input_dim = 128
+input_dim = 4246
 output_dim = 128
 path = "../raw_data/chp_op18.mid"
 batch_size = 32

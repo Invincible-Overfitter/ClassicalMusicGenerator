@@ -21,6 +21,7 @@ def preprocess(args: argparse.ArgumentParser):
     corpus_path = "../output/chord_dictionary/"
     get_dictionary_of_chord(input_dir, two_hand=False, dir=corpus_path, force=False)
     right_corpus, corpus_size = load_corpus(os.path.join(corpus_path, right_hand_corpus_file_name))
+    print(corpus_size)
 
     # load the music files
     right_tracks = []
@@ -46,6 +47,6 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output_dir', type=str, help='output directory', default="../processed_data/classical/")
     parser.add_argument('-name', '--name', type=str, help='the name of the generated file', default="total_data")
     args = parser.parse_args()
-    # preprocess(args)
+    preprocess(args)
     x, y = get_processed_data("../processed_data/classical/", "total_data")
     print(f"shape x = {x.shape}, shape y = {y.shape}")

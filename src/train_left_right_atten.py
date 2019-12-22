@@ -6,11 +6,12 @@ import torch
 from torch import nn
 from torch import optim
 import argparse
+import numpy as np
 
 device = torch.device("cpu")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(descrption='train a MIDI_NET')
+    parser = argparse.ArgumentParser()
     parser.add_argument('-e', '--epoch_number', type=int, help='the epoch number you want to train')
     parser.add_argument('-n', '--model_name', type=str, help='the model name')
     parser.add_argument('-l', '--load_epoch', type=int, help='the model epoch need to be loaded', default=0)
@@ -20,26 +21,25 @@ if __name__ == "__main__":
     right_tracks = []
     left_tracks = []
 
-    # TODO: load the dataset
-    train_x = []      # [T, B]
-    train_y = []      # [T, B]
+    train_x = np.load("../processed_data/classical/total_data_x.npy")
+    train_y = np.load("../processed_data/classical/total_data_y.npy")
 
-    encoder = EncoderRNN(input_dim, hidden_dim).to(device)
-    decoder = AttnDecoderRNN(input_dim, hidden_dim, dropout_p=0.1, max_length=time_len).to(device)
+    encoder = EncoderRNN(input_dim, emb_size, hidden_dim).to(device)
+    decoder = AttnDecoderRNN(input_dim, emb_size, hidden_dim, encoder.embedding, dropout_p=0.1, max_length=time_len).to(device)
 
-    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate, momentum=0.9)
-    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate, momentum=0.9)
+    encoder_optimizer = optim.SGD(encoder.parameters(), lr=args.learning_rate, momentum=0.9)
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=args.learning_rate, momentum=0.9)
     criterion = nn.CrossEntropyLoss()
 
     if args.load_epoch != 0:
         encoder.load_state_dict(torch.load(f'../models/encoder_{model_name}_' + str(args.load_epoch)))
         decoder.load_state_dict(torch.load(f'../models/decoder_{model_name}_' + str(args.load_epoch)))
-
+    print(train_x.shape[1])
     for i in range(1, args.epoch_number + 1):
         loss_total = 0  # Reset every print_every
         for idx in range(0, train_x.shape[1], batch_size):  # iterate each sone
-            input_tensor = train_x[:, idx * batch_size:(idx + 1) * batch_size]
-            target_tensor = train_y[:, idx * batch_size:(idx + 1) * batch_size]
+            input_tensor = train_x[:, idx:idx + batch_size]
+            target_tensor = train_y[:, idx:idx + batch_size]
             input_tensor = torch.tensor(input_tensor, dtype=torch.long)
             target_tensor = torch.tensor(target_tensor, dtype=torch.long)
 
@@ -49,18 +49,16 @@ if __name__ == "__main__":
             target_length = target_tensor.size(0)
 
             encoder_output, encoder_hidden = encoder(input_tensor)  # (time_len, batch_size, D)
-            decoder_input = torch.zeros((target_tensor.size(1)), dtype=torch.float,
-                                        device=device)
-            decoder_hidden = encoder_hidden
 
             loss = 0
             # Teacher forcing: Feed the target as the next input
+
             for di in range(target_length):
-                if i == 0:
-                    decoder_input = torch.zeros((1, target_tensor.size(1)), dtype=torch.float,
+                if di == 0:
+                    decoder_input = torch.zeros((target_tensor.size(1)), dtype=torch.long,
                                                 device=device)
-                    decoder_hidden = encoder_hidden
-                    context = torch.zeros(batch_size, hidden_dim).to(device)
+                    decoder_hidden = encoder_hidden.squeeze(0)
+                    context = torch.zeros(target_tensor.size(1), hidden_dim).to(device)
 
                 decoder_output, context, decoder_hidden, _ = decoder(decoder_input, context, decoder_hidden,
                                                          encoder_output)  # decoder_output：(1, B, D)

@@ -39,6 +39,7 @@ class AttnDecoderRNN(nn.Module):
     def __init__(self, token_size, embed_size, hidden_size, embedding, dropout_p=0.1, max_length=MAX_LENGTH):
         super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
+        self.embed_size = embed_size
         self.dropout_p = dropout_p
         self.max_length = max_length
 
