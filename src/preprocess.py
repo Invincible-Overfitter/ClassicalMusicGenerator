@@ -1,9 +1,12 @@
 from midi_io import *
 import os, argparse
 from parameters import *
+import numpy as np
 
-def get_processed_data(output_dir, output_name):
-    pass
+def get_processed_data(path, output_name):
+    x = np.load(os.path.join(path, output_name+"_x.npy"))
+    y = np.load(os.path.join(path, output_name+"_y.npy"))
+    return x, y
 
 def preprocess(args: argparse.ArgumentParser):
     input_dir = args.input_dir
@@ -37,11 +40,12 @@ def preprocess(args: argparse.ArgumentParser):
     save_npy(tot_x, save_path_x)
     save_npy(tot_y, save_path_y)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_dir', type=str, help='input directory', default="../raw_data/classical/")
     parser.add_argument('-o', '--output_dir', type=str, help='output directory', default="../processed_data/classical/")
     parser.add_argument('-name', '--name', type=str, help='the name of the generated file', default="total_data")
     args = parser.parse_args()
-    preprocess(args)
+    # preprocess(args)
+    x, y = get_processed_data("../processed_data/classical/", "total_data")
+    print(f"shape x = {x.shape}, shape y = {y.shape}")
