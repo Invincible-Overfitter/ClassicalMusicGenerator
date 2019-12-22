@@ -23,7 +23,7 @@ def make_sure_path_exists(path):
             raise
 
 """
-Use a new package (pypianoroll to process data)
+Use a new package (pypianoroll to process raw_data)
 
 Input one file path, output a pianoroll representation of the music.
 If merge == True, then return (n_time_stamp, 128) other wish return (n_time_stamp, 128, num_track)
@@ -39,25 +39,33 @@ def midi2Pianoroll(filepath,
     tuple of `midi_md5` and useful information extracted from the MIDI file.
     """
     midi_md5 = os.path.splitext(os.path.basename(filepath))[0]
-    prettyMIDI = PrettyMIDI(filepath)
-    time_signiture = ""
-    if len(prettyMIDI.time_signature_changes)>0:
-        time_signiture = "{}/{}".format(prettyMIDI.time_signature_changes[0].numerator,
-                                        prettyMIDI.time_signature_changes[0].denominator)
-    if time_signiture == "":
-        raise ValueError(midi_md5 + " no timesigniture")
+    # prettyMIDI = PrettyMIDI(filepath)
+    # time_signiture = ""
+    # if len(prettyMIDI.time_signature_changes)>0:
+    #     time_signiture = "{}/{}".format(prettyMIDI.time_signature_changes[0].numerator,
+    #                                     prettyMIDI.time_signature_changes[0].denominator)
+    # if time_signiture == "":
+    #     raise ValueError(midi_md5 + " no timesigniture")
 
-    if time_signiture != CONFIG['time_signatures']:
-        warnings.warn(midi_md5 + "'s timesiniture is " + time_signiture + " != " + CONFIG['time_signatures'])
-        return None
+    # if time_signiture != CONFIG['time_signatures']:
+    #     warnings.warn(midi_md5 + "'s timesiniture is " + time_signiture + " != " + CONFIG['time_signatures'])
+    #     return None
 
     multitrack = Multitrack(filepath, beat_resolution=CONFIG['beat_resolution'], name=midi_md5)
     if merge:
         result = multitrack.get_merged_pianoroll(mode="max")
     else:
         result = multitrack.get_stacked_pianoroll()
-        if len(result) > 1:
+        right = None
+        left = None
+        for each_track in multitrack.tracks:
+            if each_track.name.strip().lower() == 'piano right':
+                right = each_track.pianoroll
+            if each_track.name.strip().lower() == 'piano left':
+                left = each_track.pianoroll
+        if right is None or left is None:
             return None
+        result = np.stack([right, left], axis=2)
 
     if not velocity:
         result = np.where(result > 0, 1, 0)
@@ -89,7 +97,7 @@ def createSeqNetInputs(pianoroll_data: list, x_seq_length: int, lagging: int,
             y_tmp.append(piano_roll[pos + lagging: pos + x_seq_length + lagging])
             pos += x_seq_length
 
-        x_tmp = np.stack(x_tmp, axis=1)
+        x_tmp = np.stack(x_tmp, axis=1) #(T, B, D)
         y_tmp = np.stack(y_tmp, axis=1)
         x.append(x_tmp)
         y.append(y_tmp)
@@ -103,10 +111,15 @@ def createSeqNetInputs(pianoroll_data: list, x_seq_length: int, lagging: int,
 Get all the chords for the training set.
 """
 def get_dictionary_of_chord(root_path,
-                            two_hand=True # True if the chord is chord is played by two hand.
+                            two_hand=True, # True if the chord is chord is played by two hand.
+                            dir = "../output/chord_dictionary/",
+                            force = False,
                             ):
-    dir = "../output/chord_dictionary/"
     make_sure_path_exists(dir)
+    if not force and not two_hand and os.path.exists(os.path.join(dir, right_hand_corpus_file_name)) and os.path.exists(os.path.join(dir, left_hand_corpus_file_name)):
+        return
+    if not force and two_hand and os.path.exists(os.path.join(dir, two_hand_corpus_file_name)):
+        return
 
     def func(result):
         chord_set = set()
@@ -138,7 +151,7 @@ def get_dictionary_of_chord(root_path,
                     dic[i] = count
                     count += 1
         print(f"In total, there are {count} chords")
-        with open(os.path.join(dir, "two-hand.json"), "w") as f:
+        with open(os.path.join(dir, two_hand_corpus_file_name), "w") as f:
             f.write(json.dumps(dic))
 
     else:
@@ -151,41 +164,42 @@ def get_dictionary_of_chord(root_path,
         dic_left['[]'] = SILENCE_TOEKN
         for midi_path in findall_endswith('.mid', root_path):
             result = midi2Pianoroll(midi_path, merge=False, velocity=False)
-            left = result[:, :, 1]
-            right = result[:, :, 0]
-            lis_left = func(left)
-            lis_right = func(right)
-            for i in lis_left:
-                if i not in dic_left.keys():
-                    dic_left[i] = count_left
-                    count_left += 1
+            if result is not None:
+                left = result[:, :, 1]
+                right = result[:, :, 0]
+                lis_left = func(left)
+                lis_right = func(right)
+                for i in lis_left:
+                    if i not in dic_left.keys():
+                        dic_left[i] = count_left
+                        count_left += 1
 
-            for i in lis_right:
-                if i not in dic_right.keys():
-                    dic_right[i] = count_right
-                    count_right += 1
+                for i in lis_right:
+                    if i not in dic_right.keys():
+                        dic_right[i] = count_right
+                        count_right += 1
+
         print(f"In total, there are {count_left}/{count_right} left/right-hand chords")
-
-        with open(os.path.join(dir, "left-hand.json"), "w") as f:
+        with open(os.path.join(dir, left_hand_corpus_file_name), "w") as f:
             f.write(json.dumps(dic_left))
 
-        with open(os.path.join(dir, "right-hand.json"), "w") as f:
+        with open(os.path.join(dir, right_hand_corpus_file_name), "w") as f:
             f.write(json.dumps(dic_right))
 
 """
 Convert pianoroll to one-hot version based on dictionary
 """
-def pianoroll2Embedding(pianoroll: np.array, dictionary_dict) -> list:
-    x_dict = defaultdict(list)
+def pianoroll2Embedding(pianoroll: np.array, dictionary_dict: dict) -> list:
+    pianoroll_to_str = []
     i = 0
     for row in pianoroll:
         id = np.argwhere(row).flatten()
         value = id.tolist()
-        x_dict[i] = str(value)
+        pianoroll_to_str.append(str(value))
         i += 1
 
-    x_dict[i] = None
-    id_ = [int(dictionary_dict[str(v)]) for v in x_dict.values()]
+    pianoroll_to_str.append("None")
+    id_ = [int(dictionary_dict[v]) for v in pianoroll_to_str]
     return id_
 
 
@@ -246,26 +260,9 @@ def load_corpus(path):
         dic = json.load(f)
     return dic, len(dic)
 
-if __name__ == "__main__":
-    root_path = "../data/"
 
-    ## 1. test get_dictionary_of_chord
-    get_dictionary_of_chord(root_path, two_hand=True)
-    #'''
-    midi_path = "../data/chpn_op7_1.mid"
-    pianoroll_data = midi2Pianoroll(midi_path, merge=True, velocity=True)
+def save_npy(x, path):
+    np.save(path, x)
 
-    # ## 2. test pianoroll to midi file
-    # pianorollToMidi(pianoroll_data, name="test_midi.mid", velocity=True)
-    with open("../output/chord_dictionary/two-hand.json", "r") as f:
-        dictionary = json.load(f)
-    load_corpus("../output/chord_dictionary/two-hand.json")
-    dic_data = pianoroll2Embedding(pianoroll_data, dictionary)
-    assert dic_data[-1] == END_TOKEN
-    # # test pianoroll to midi file for dictionary mode
-    pianoroll2Midi(dic_data, name="test_midi.mid", velocity=False, dictionary_dict=dictionary)
-
-    ## 3. create output
-    # x, y = createSeqNetInputs([pianoroll_data], 5, 5)
-    x, y = createSeqNetInputs([pianoroll_data], 5, 5, dictionary)
-    #'''
+def load_npy(x, path):
+    return np.load(path)

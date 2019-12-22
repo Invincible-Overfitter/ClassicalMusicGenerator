@@ -63,7 +63,7 @@ def train_mul(args):
     model_name = "best model"
     right_tracks = []
     left_tracks = []
-    for midi_path in findall_endswith(".mid", "../data/classical"):
+    for midi_path in findall_endswith(".mid", "../raw_data/classical"):
         pianoroll_data = midi2Pianoroll(midi_path, merge=False, velocity=False)  # (n_time_stamp, 128, num_track)
         if pianoroll_data is not None:
             right_track, left_track = pianoroll_data[:, :, 0], pianoroll_data[:, :, 1]

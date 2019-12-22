@@ -106,7 +106,7 @@ def predict(root, origin_length, encoder1, decoder1, target_length, model_name, 
 
 def train_mul(args):
     model_name = "dict_atten_left_right_chord2vec"
-    root = "../data/naive"
+    root = "../raw_data/naive"
     origin_num_bars = 10
     target_num_bars = 20
     target_length = STAMPS_PER_BAR * target_num_bars
@@ -149,7 +149,7 @@ def train_mul(args):
     x = np.concatenate(right_tracks)
     y = np.concatenate(left_tracks)
     model = train_left(x, y)
-    predict("../data/test", origin_length, encoder1, attn_decoder1, target_length, model_name, model)
+    predict("../raw_data/test", origin_length, encoder1, attn_decoder1, target_length, model_name, model)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='train a MIDI_NET')

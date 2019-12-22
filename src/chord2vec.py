@@ -3,7 +3,7 @@ from gensim.models import Word2Vec
 from parameters import *
 import numpy as np
 model_name = "dict_atten_left_right"
-root = "../data/naive"
+root = "../raw_data/naive"
 origin_num_bars = 10
 target_num_bars = 20
 target_length = STAMPS_PER_BAR * target_num_bars

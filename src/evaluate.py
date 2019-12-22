@@ -53,10 +53,10 @@ def batch_evaluate(path):
     print(f"QNS: {sum(qns) / len(qns)}")
 
 if __name__ == "__main__":
-    midi_path = "../data/chp_op18.mid"
+    midi_path = "../raw_data/chp_op18.mid"
     dict_atten_right_left = "../output/samples_dict_atten_right_left"
     cnn_atten_many_hot = "../output/cnn-atten-many-hot"
-    true_music = "../data/naive"
+    true_music = "../raw_data/naive"
     batch_evaluate(true_music)
     batch_evaluate(cnn_atten_many_hot)
     batch_evaluate(dict_atten_right_left)
